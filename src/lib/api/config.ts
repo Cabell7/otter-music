@@ -3,13 +3,14 @@ import type { ApiResponse } from "@otter-music/shared";
 
 export const IS_NATIVE = Capacitor.isNativePlatform();
 
-const getDefaultApiUrl = () => "https://otter-music.pages.dev";
+const getDefaultApiUrl = () => window.location.origin;
+export const PROXY_ENABLED = false;
 
 const STORAGE_KEY_CUSTOM_API_URL = "otter_custom_api_url";
 
 export function getApiUrl(): string {
   const custom = getStorage<string | null>(STORAGE_KEY_CUSTOM_API_URL, null);
-  return custom || getDefaultApiUrl();
+  return IS_NATIVE ? custom || getDefaultApiUrl() : getDefaultApiUrl();
 }
 
 export function getCustomApiUrl(): string | null {
@@ -75,8 +76,7 @@ const setStorage = (key: string, val: unknown) =>
  * 获取 GD 音乐台 API 默认访问顺序
  */
 function getDefaultMusicApiUrls(): string[] {
-  const proxiedApiUrl = `${getApiUrl()}/music-api`;
-  return [DEFAULT_MUSIC_API_URL, proxiedApiUrl];
+  return [DEFAULT_MUSIC_API_URL];
 }
 
 export const getMusicApiUrls = () => {
@@ -141,7 +141,7 @@ export function fetchWithTimeout(
 }
 
 export function getProxyUrl(url: string) {
-  return `${getApiUrl()}/proxy?url=${encodeURIComponent(url)}`;
+  return url; // Direct device request; this deployment has no proxy.
 }
 
 /**

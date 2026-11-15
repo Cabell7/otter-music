@@ -1,10 +1,10 @@
 import { RouterProvider } from "react-router-dom";
 import { router } from "./router";
 import "./assets/global.css"; // Ensure styles are imported
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useAppStore, useDownloadStore } from "./store";
 import { useSyncStore } from "@/store/sync-store";
-import { checkAndSync } from "@/lib/sync";
+import { startAutoSync } from "@/lib/auto-sync";
 import { cleanupCache } from "@/lib/utils/cache";
 import { revokeAll } from "@/lib/utils/blob-registry";
 import { stopBilibiliProxyServer } from "@/lib/bilibili/bilibili-native-player";
@@ -15,14 +15,8 @@ import { applyTopSafeAreaFallback } from "@/lib/safe-area";
 export default function App() {
   // Sync Logic
   const { syncKey } = useSyncStore();
-  const syncInProgress = useRef(false);
   useEffect(() => {
-    if (syncKey && !syncInProgress.current) {
-      syncInProgress.current = true;
-      checkAndSync().finally(() => {
-        syncInProgress.current = false;
-      });
-    }
+    if (syncKey) return startAutoSync();
   }, [syncKey]);
 
   useEffect(() => {
@@ -31,7 +25,7 @@ export default function App() {
 
     // 启动时静默检查更新（用户关闭更新提醒后跳过，延迟 2s 避免阻塞首屏）
     const timer = setTimeout(() => {
-      if (useAppStore.getState().enableUpdateNotify) {
+      if (IS_NATIVE && useAppStore.getState().enableUpdateNotify) {
         useAppStore.getState().checkUpdate(true);
       }
     }, 2000);

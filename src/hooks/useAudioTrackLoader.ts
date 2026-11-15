@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { getProxyUrl, isProxyUrl } from "@/lib/api";
+import { PROXY_ENABLED, getProxyUrl, isProxyUrl } from "@/lib/api";
 import { useMusicStore } from "@/store/music-store";
 import { useSourceQualityStore } from "@/store/source-quality-store";
 import { useDownloadStore } from "@/store/download-store";
@@ -246,7 +246,7 @@ export function useAudioTrackLoader(
 
           // 代理备用线路容灾（仅网络层失败才回退，鉴权/格式类失败不走）
           if (
-            getState().enableProxyFallback &&
+            PROXY_ENABLED && getState().enableProxyFallback &&
             isNetworkMediaError(err) &&
             source !== "local" &&
             fallbackStageRef.current.stage === "none" &&

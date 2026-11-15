@@ -91,6 +91,7 @@ function ensureBlob(data: unknown, mimeType: string): Blob | null {
 }
 
 function buildBilibiliAudioProxyUrl(bvid: string, audioUrl: string): string {
+  if (!config.PROXY_ENABLED) return audioUrl;
   const params = new URLSearchParams({ bvid, url: audioUrl });
   if (!config.IS_NATIVE) {
     return `${BILIBILI_DEV_AUDIO_PROXY}?${params.toString()}`;

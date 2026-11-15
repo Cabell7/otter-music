@@ -1,38 +1,24 @@
-import { corsMiddleware } from "./middleware/cors";
-import { authRoutes } from "./routes/auth";
-import { proxyRoutes } from "./routes/proxy";
-import { updateRoutes } from "./routes/update";
-import { musicRoutes } from "./routes/music";
-import { syncRoutes } from "./routes/sync";
-import { syncRoutesV2 } from "./routes/sync-v2";
-import { podcastRoutes } from "./routes/api";
-
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { authRoutes } from "./routes/auth";
+import { syncRoutesV2 } from "./routes/sync-v2";
 import type { Env } from "./types/hono";
 
-export const app = new Hono<{
-  Bindings: Env;
-}>();
-
-// Global Middleware
+export const app = new Hono<{ Bindings: Env }>();
+// Private deployment: no outbound fetch routes or media relays.
 app.use("*", async (c, next) => {
-  console.log(`[Hono] ${c.req.method} ${c.req.path}`);
+  c.header("Cache-Control", "no-store");
+  c.header("X-Content-Type-Options", "nosniff");
+  const origin = c.req.header("Origin");
+  if (origin && origin !== new URL(c.req.url).origin) {
+    return c.json({ success: false, message: "Forbidden origin" }, 403);
+  }
   await next();
 });
-app.use("*", corsMiddleware);
-
+app.use("*", bodyLimit({ maxSize: 8 * 1024 * 1024 }));
 app.get("/health", (c) => c.text("OK"));
-app.on("HEAD", "/health", (c) => c.body(null, 200));
-
-// Routes
 app.route("/auth", authRoutes);
-
-app.route("/proxy", proxyRoutes);
-app.route("/update", updateRoutes);
-app.route("/music-api", musicRoutes);
-app.route("/sync", syncRoutes);
 app.route("/sync/v2", syncRoutesV2);
-app.route("/podcast-api", podcastRoutes);
-
-// Export AppType for RPC
+// JSON avoids index.html fallback on disabled API paths.
+app.notFound((c) => c.json({ success: false, message: "Not found" }, 404));
 export type AppType = typeof app;

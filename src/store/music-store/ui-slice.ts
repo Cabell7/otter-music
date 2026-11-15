@@ -95,7 +95,7 @@ export const createUiSlice: StateCreator<MusicState, [], [], UiSlice> = (
   autoMatchFavorites: false,
   autoMatchPlaylists: true,
   autoMatchContext: null,
-  enableProxyFallback: true,
+  enableProxyFallback: false,
   bilibiliKeepOriginalMeta: false,
   bilibiliAutoMatchSuffix: "高音质 原曲",
   fullScreenBackgroundMode: "theme",

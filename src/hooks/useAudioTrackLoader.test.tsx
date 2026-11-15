@@ -23,6 +23,7 @@ vi.mock("@/lib/audio-resolver", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
+  PROXY_ENABLED: false,
   isProxyUrl: vi.fn(() => false),
   getProxyUrl: vi.fn((url: string) => url),
 }));
@@ -251,7 +252,7 @@ describe("useAudioTrackLoader", () => {
     cleanup();
   });
 
-  it("网络层播放失败时回退代理线路，且不重复请求 URL", async () => {
+  it("禁用代理时网络播放失败不使用代理线路", async () => {
     const PROXY_URL = "https://proxy.example.com/audio";
     vi.mocked(getProxyUrl).mockReturnValueOnce(PROXY_URL);
 
@@ -265,14 +266,8 @@ describe("useAudioTrackLoader", () => {
     });
     await flushAsync();
 
-    expect(toast).toHaveBeenCalledWith("已切换备用线路", {
-      icon: "🌐",
-      id: "proxy-notice",
-    });
-    expect(getProxyUrl).toHaveBeenCalledWith(MOCK_URL);
-    expect(audio.play).toHaveBeenCalledTimes(2);
-    // 代理回退复用 remoteUrlRef 中的远程 URL，不重新触发 URL 解析
-    expect(resolveTrackUrl).toHaveBeenCalledTimes(1);
+    expect(getProxyUrl).not.toHaveBeenCalled();
+    expect(audio.play).toHaveBeenCalledTimes(1);
     cleanup();
   });
 
@@ -324,3 +319,4 @@ describe("useAudioTrackLoader", () => {
     cleanup();
   });
 });
+

@@ -17,7 +17,7 @@ import { useDownloadStore } from "@/store/download-store";
 import { useMusicStore } from "@/store/music-store";
 
 import { toastUtils } from "./toast";
-import { getProxyUrl, isProxyUrl, IS_NATIVE } from "@/lib/api/config";
+import { PROXY_ENABLED, getProxyUrl, isProxyUrl, IS_NATIVE } from "@/lib/api/config";
 import { logger } from "@/lib/logger";
 import { processBatchIO } from "@/lib/utils";
 import { embedMetadata, fetchEmbedLyric } from "./id3-embed";
@@ -142,7 +142,7 @@ async function performDownloadOne(
       return;
     }
 
-    if (isProxyUrl(url)) throw err;
+    if (!PROXY_ENABLED || isProxyUrl(url)) throw err;
     logger.warn("Direct download failed, retrying with proxy...", err);
     if (toastId) {
       toast.loading("已切换备用下载线路", { id: toastId, icon: "🌐" });

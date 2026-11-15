@@ -173,6 +173,7 @@ syncRoutes.post(
     const raw = JSON.stringify(mergedData);
     await kv.put(kvKey, raw, {
       metadata: {
+        version: newVersion,
         lastSyncTime: newVersion,
         sizeBytes: new TextEncoder().encode(raw).length,
       } satisfies SyncKeyMetadata,
@@ -241,3 +242,4 @@ syncRoutes.delete("/keys/:key", authMiddleware, async (c) => {
   await kv.delete(kvKey);
   return ok(c, null, "Sync key deleted");
 });
+

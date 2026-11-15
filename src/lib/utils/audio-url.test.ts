@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { normalizeAudioUrlForPlayback } from "./audio-url";
 
 vi.mock("@/lib/api/config", () => ({
+  PROXY_ENABLED: false,
   getApiUrl: () => "https://otter-music.pages.dev",
   getProxyUrl: (url: string) =>
     `https://otter-music.pages.dev/proxy?url=${encodeURIComponent(url)}`,
@@ -17,29 +18,29 @@ vi.mock("@/lib/api/config", () => ({
 }));
 
 describe("normalizeAudioUrlForPlayback", () => {
-  it("converts http:// to current proxy", () => {
+  it("upgrades remote http:// to https", () => {
     expect(normalizeAudioUrlForPlayback("http://bd-er.kuwo.cn/a.mp3")).toBe(
-      "https://otter-music.pages.dev/proxy?url=http%3A%2F%2Fbd-er.kuwo.cn%2Fa.mp3"
+      "https://bd-er.kuwo.cn/a.mp3"
     );
   });
 
-  it("refreshes old proxy url with current backend", () => {
+  it("unwraps old proxy url", () => {
     expect(
       normalizeAudioUrlForPlayback(
         "https://old-backend.example.com/proxy?url=http%3A%2F%2Fbd-er.kuwo.cn%2Fa.mp3"
       )
     ).toBe(
-      "https://otter-music.pages.dev/proxy?url=http%3A%2F%2Fbd-er.kuwo.cn%2Fa.mp3"
+      "https://bd-er.kuwo.cn/a.mp3"
     );
   });
 
-  it("keeps current proxy url unchanged", () => {
+  it("unwraps current backend proxy url", () => {
     expect(
       normalizeAudioUrlForPlayback(
         "https://otter-music.pages.dev/proxy?url=http%3A%2F%2Fbd-er.kuwo.cn%2Fa.mp3"
       )
     ).toBe(
-      "https://otter-music.pages.dev/proxy?url=http%3A%2F%2Fbd-er.kuwo.cn%2Fa.mp3"
+      "https://bd-er.kuwo.cn/a.mp3"
     );
   });
 
@@ -73,3 +74,5 @@ describe("normalizeAudioUrlForPlayback", () => {
     ).toBe("http://127.0.0.1:8765/proxy?url=test");
   });
 });
+
+

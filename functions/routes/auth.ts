@@ -20,11 +20,11 @@ authRoutes.post(
     const { password } = c.req.valid('json');
     const env = c.env;
 
-    if (!password || password !== env.PASSWORD) {
+    if (!env.PASSWORD || env.PASSWORD.length < 20 || password !== env.PASSWORD) {
       return fail(c, 'Unauthorized', 401);
     }
 
-    const secret = env.PASSWORD || 'secret';
+    const secret = env.PASSWORD;
     const token = await signJWT(secret);
 
     const isSecure = c.req.url.startsWith("https");
@@ -41,7 +41,7 @@ authRoutes.post(
       .join("; ");
 
     c.header('Set-Cookie', cookie);
-    return ok(c, { token }, 'Login successful', 200);
+    return ok(c, null, 'Login successful', 200);
   }
 );
 

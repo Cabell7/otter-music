@@ -104,7 +104,7 @@ export async function checkAndSync(force = false): Promise<SyncResult> {
     );
 
     // 无条件信任服务端合并后的权威结果
-    applySnapshot(response.data);
+    applySnapshot(mergeSnapshots(response.data, getSnapshot()));
     setLastSyncTime(response.lastSyncTime);
     setVersion(response.version);
 
@@ -131,7 +131,7 @@ export async function checkAndSync(force = false): Promise<SyncResult> {
             merged,
             pullRes.version
           );
-          applySnapshot(retryRes.data);
+          applySnapshot(mergeSnapshots(retryRes.data, getSnapshot()));
           setLastSyncTime(retryRes.lastSyncTime);
           setVersion(retryRes.version);
           toast.success("同步成功");

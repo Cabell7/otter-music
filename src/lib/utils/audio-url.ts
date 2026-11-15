@@ -1,4 +1,4 @@
-import { getApiUrl, getProxyUrl, isProxyUrl } from "@/lib/api/config";
+import { PROXY_ENABLED, getApiUrl, getProxyUrl, isProxyUrl } from "@/lib/api/config";
 
 /**
  * 判断 URL 是否指向 localhost / 127.0.0.1
@@ -50,6 +50,12 @@ function isCurrentBackendProxyUrl(url: string): boolean {
  * - 其他（https 直连、blob:、capacitor:）→ 原样返回
  */
 export function normalizeAudioUrlForPlayback(url: string): string {
+  if (!PROXY_ENABLED) {
+    if (isLocalhostUrl(url)) return url;
+    const direct = extractOriginalAudioUrl(url);
+    return direct.startsWith("http://") && !isLocalhostUrl(direct)
+      ? direct.replace(/^http:/, "https:") : direct;
+  }
   if (url.startsWith("http://")) {
     if (isLocalhostUrl(url)) return url;
     return getProxyUrl(url);

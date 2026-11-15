@@ -79,7 +79,7 @@ export async function fetchBilibiliSongUrl(
     buildBilibiliPlayUrlPath(bvid, cid),
     referer
   );
-  return selectBilibiliAudioUrl(playUrl);
+  return selectBilibiliAudioUrl(playUrl)?.url ?? null;
 }
 
 export async function proxyBilibiliAudio(
@@ -250,3 +250,4 @@ export async function proxyBilibiliAudioApi(
     headers: responseHeaders,
   });
 }
+

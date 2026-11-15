@@ -9,6 +9,7 @@ beforeEach(() => {
     fetchWithTimeout: vi.fn(),
     getApiUrl: vi.fn().mockReturnValue("https://otter-music.pages.dev"),
     IS_NATIVE: false,
+    PROXY_ENABLED: false,
   };
   mockCapacitor = {
     Capacitor: { isNativePlatform: vi.fn() },
@@ -228,7 +229,7 @@ describe("getBilibiliSongUrl", () => {
     const { getBilibiliSongUrl } = await import("./bilibili-api");
 
     await expect(getBilibiliSongUrl("bilibili_BV1xx411c7mD")).resolves.toEqual({
-      url: "/api/bilibili-audio?bvid=BV1xx411c7mD&url=https%3A%2F%2Fexample.com%2Faudio.m4s",
+      url: "https://example.com/audio.m4s",
       format: "m4s",
     });
   });
@@ -681,3 +682,4 @@ describe("UP space (native)", () => {
     expect(urls[0]).not.toContain("w_rid=");
   });
 });
+

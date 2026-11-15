@@ -11,5 +11,5 @@ export async function signJWT(secret: string) {
 }
 
 export async function verifyJWT(token: string, secret: string) {
-  return jwtVerify(token, encoder.encode(secret));
+  return jwtVerify(token, encoder.encode(secret), { algorithms: ["HS256"], subject: "admin" });
 }

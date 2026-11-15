@@ -21,7 +21,7 @@ type SyncRecord = {
 };
 type SyncPlaylist = SyncRecord & { tracks: SyncRecord[] };
 
-const TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 墓碑保留 7 天
+const TOMBSTONE_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 墓碑保留 7 天
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const COMPRESS_THRESHOLD = 1024; // 小于此字节数不压缩
 const MAGIC_RAW = 0x00; // 小于 COMPRESS_THRESHOLD，直接存 JSON 的二进制，并在开头放一个 0x00
@@ -43,16 +43,12 @@ const streamToU8 = (s: ReadableStream) =>
 
 async function deflate(input: Uint8Array): Promise<Uint8Array> {
   const cs = new CompressionStream("deflate-raw");
-  const w = cs.writable.getWriter();
-  await w.write(toArrayBuffer(input)).finally(() => w.close());
-  return streamToU8(cs.readable);
+  return streamToU8(new Blob([toArrayBuffer(input)]).stream().pipeThrough(cs));
 }
 
 async function inflate(input: Uint8Array): Promise<string> {
   const ds = new DecompressionStream("deflate-raw");
-  const w = ds.writable.getWriter();
-  await w.write(toArrayBuffer(input)).finally(() => w.close());
-  return new TextDecoder().decode(await streamToU8(ds.readable));
+  return new TextDecoder().decode(await streamToU8(new Blob([toArrayBuffer(input)]).stream().pipeThrough(ds)));
 }
 
 async function serializeForKV(data: unknown): Promise<ArrayBuffer> {
@@ -172,7 +168,7 @@ syncRoutesV2.use("/*", async (c, next) => {
     return next();
 
   const token = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
-  if (!token) return fail(c, "Invalid Authorization", 401);
+  if (!token || !/^[A-Za-z0-9_-]{16,100}$/.test(token)) return fail(c, "Invalid Authorization", 401);
 
   c.set("syncKey", token);
   c.set("kvKey", `${SYNC_KEY_PREFIX}${token}`);
@@ -260,9 +256,18 @@ syncRoutesV2.post(
       ...serverData,
       ...client,
       favorites: mergeLWW(serverData.favorites, client.favorites),
-      playlists: mergeLWW(serverData.playlists, client.playlists),
+      playlists: mergeLWW(serverData.playlists, client.playlists).map((playlist) => {
+        const server = serverData.playlists.find((p) => p.id === playlist.id);
+        const local = client.playlists.find((p) => p.id === playlist.id);
+        return server && local
+          ? { ...playlist, tracks: mergeLWW(server.tracks, local.tracks) }
+          : playlist;
+      }),
     };
 
+    if (JSON.stringify(merged) === JSON.stringify(serverData)) {
+      return ok(c, { data: merged, lastSyncTime: metadata?.lastSyncTime || 0, version: metadata?.version ?? 0 });
+    }
     const newVersion = (metadata?.version ?? 0) + 1;
     const serialized = await serializeForKV(merged);
     await kv.put(kvKey, serialized, {

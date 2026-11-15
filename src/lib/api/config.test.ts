@@ -59,10 +59,10 @@ describe("music api default route policy", () => {
     localStorage.clear();
   });
 
-  it("returns GD API first with proxied fallback when no custom URLs are configured", () => {
+  it("returns the direct GD API when no custom URLs are configured", () => {
     const proxiedUrl = `${getApiUrl()}/music-api`;
 
-    expect(getMusicApiUrls()).toEqual([DEFAULT_MUSIC_API_URL, proxiedUrl]);
+    expect(getMusicApiUrls()).toEqual([DEFAULT_MUSIC_API_URL]);
   });
 
   it("keeps custom endpoint order when configured", () => {
@@ -77,3 +77,4 @@ describe("music api default route policy", () => {
     ]);
   });
 });
+

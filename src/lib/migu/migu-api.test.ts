@@ -161,7 +161,7 @@ describe("parse migu responses", () => {
 });
 
 describe("getMiguLyric", () => {
-  it("loads web lyrics through the generic proxy", async () => {
+  it("loads web lyrics directly", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response("[00:00.00]歌词", { status: 200 }));
@@ -174,7 +174,7 @@ describe("getMiguLyric", () => {
       tlyric: "",
     });
     expect(String(fetchMock.mock.calls[0][0])).toContain(
-      "/proxy?url=https%3A%2F%2Fd.musicapp.migu.cn%2Flrc"
+      "https://d.musicapp.migu.cn/lrc"
     );
   });
 
@@ -534,3 +534,4 @@ describe("searchMiguSongs (native)", () => {
     expect(result.items).toHaveLength(0);
   });
 });
+

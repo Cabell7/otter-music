@@ -1,37 +1,16 @@
-import { createMiddleware } from 'hono/factory';
-import { verifyJWT } from '@utils/auth';
-import type { Env } from '../types/hono';
-import { fail } from '@utils/response';
-
-const PUBLIC_PATHS = [
-  /^\/$/,
-  /^\/auth\/login/,
-  /^\/_next\//,
-  /\.(ico|png|svg|jpg|jpeg|css|js|webmanifest|json|woff|woff2|ttf|eot)$/,
-];
+import { createMiddleware } from "hono/factory";
+import { verifyJWT } from "@utils/auth";
+import type { Env } from "../types/hono";
+import { fail } from "@utils/response";
 
 export const authMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next) => {
-  const path = c.req.path;
-  if (PUBLIC_PATHS.some(pattern => pattern.test(path))) {
-    await next();
-    return;
-  }
-
-  const env = c.env;
-
-  // 1. 检查 Cookie
-  const cookie = c.req.header('Cookie');
-  const authCookie = cookie?.match(/(?:^|;\s*)auth=([^;]+)/)?.[1];
-
-  if (!authCookie) {
-    return fail(c, `Unauthorized, cookie: ${cookie}`, 401);
-  }
-
+  if (!c.env.PASSWORD || c.env.PASSWORD.length < 20) return fail(c, "Admin not configured", 503);
+  const token = c.req.header("Cookie")?.match(/(?:^|;\s*)auth=([^;]+)/)?.[1];
+  if (!token) return fail(c, "Unauthorized", 401);
   try {
-    const secret = env.PASSWORD || 'secret';
-    await verifyJWT(authCookie, secret);
-    await next();
-  } catch (_e) {
-    return fail(c, 'Unauthorized', 401);
+    await verifyJWT(token, c.env.PASSWORD);
+  } catch {
+    return fail(c, "Unauthorized", 401);
   }
+  await next();
 });
