@@ -15,6 +15,7 @@ import {
 } from "@/types/music";
 import { BaseMusicProvider } from "../base-provider";
 import { logger } from "@/lib/logger";
+import { IS_NATIVE } from "@/lib/api/config";
 
 export class NeteaseProvider extends BaseMusicProvider {
   source = "netease" as const;
@@ -25,9 +26,10 @@ export class NeteaseProvider extends BaseMusicProvider {
     query: string,
     page: number,
     count: number,
-    _signal?: AbortSignal,
-    _intent?: SearchIntent
+    signal?: AbortSignal,
+    intent?: SearchIntent
   ): Promise<SearchPageResult<MusicTrack>> {
+    if (!IS_NATIVE) return super.search(query, page, count, signal, intent);
     const res = await neteaseSearch(query, 1, page, count);
     const songs = res.data.result.songs || [];
     const items = songs.map((s) => ({
