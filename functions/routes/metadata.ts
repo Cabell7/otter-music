@@ -71,7 +71,7 @@ metadataRoutes.get("/podcast", async (c) => {
   if (!url) return c.json({ error: "Unknown podcast source" }, 400);
   try {
     const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(15000), headers: { accept: "application/rss+xml, application/xml, text/xml", "user-agent": "OtterMusic/2.0" } });
-    if (!response.ok || !response.body) return c.json({ error: "Podcast unavailable" }, 502);
+    if (!response.ok || !response.body) return c.json({ error: "Podcast upstream failed", upstreamStatus: response.status }, 424);
     const reader = response.body.getReader();
     let bytes = 0;
     const limited = new ReadableStream<Uint8Array>({
@@ -91,5 +91,10 @@ metadataRoutes.get("/podcast", async (c) => {
       cancel() { void reader.cancel().catch(() => {}); },
     });
     return c.json({ success: true, data: await streamParseRss(limited, url) });
-  } catch { return c.json({ error: "Podcast unavailable" }, 502); }
+  } catch (error) {
+    const name = error instanceof Error ? error.name.slice(0, 40) : "Error";
+    // Do not expose URLs or arbitrary thrown values in diagnostic output.
+    const message = error instanceof Error ? error.message.replace(/https?:\/\/\S+/gi, "[url]").slice(0, 120) : "Unknown error";
+    return c.json({ error: "Podcast unavailable", name, message }, 424);
+  }
 });

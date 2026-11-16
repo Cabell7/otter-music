@@ -39,4 +39,20 @@ describe("private metadata", () => {
     fetchSpy.mockRestore();
   });
 
+  it("returns upstream status and bounded diagnostics as JSON", async () => {
+    const cookie = `site=${await signSiteJWT(password)}`;
+    const headers = { Cookie: cookie };
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("blocked", { status: 403 })).mockRejectedValueOnce(new Error("failed https://private.example/path " + "x".repeat(200)));
+    const upstream = await app.request("https://music.test/metadata/podcast?source=default-zx7", { headers }, env);
+    expect(upstream.status).toBe(424);
+    expect((await upstream.json() as any).upstreamStatus).toBe(403);
+    const failed = await app.request("https://music.test/metadata/podcast?source=default-zx7", { headers }, env);
+    const data = await failed.json() as any;
+    expect(failed.status).toBe(424);
+    expect(data.name).toBe("Error");
+    expect(data.message).not.toContain("private.example");
+    expect(data.message.length).toBeLessThanOrEqual(120);
+    spy.mockRestore();
+  });
+
 });
