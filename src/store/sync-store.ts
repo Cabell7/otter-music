@@ -8,17 +8,20 @@ interface SyncState {
   syncKey: string | null;
   lastSyncTime: number;
   version: number;
+  dirty: boolean;
 
   setSyncKey: (key: string) => void;
   clearSyncConfig: () => void;
   setLastSyncTime: (time: number) => void;
   setVersion: (v: number) => void;
+  setDirty: (dirty: boolean) => void;
 }
 
 type PersistedState = {
   syncKey: string | null;
   lastSyncTime: number;
   version: number;
+  dirty: boolean;
 };
 
 /**
@@ -63,12 +66,14 @@ export const useSyncStore = create<SyncState>()(
       syncKey: null,
       lastSyncTime: 0,
       version: 0,
+      dirty: true,
 
       setSyncKey: (key) => set({ syncKey: key }),
       clearSyncConfig: () =>
-        set({ syncKey: null, lastSyncTime: 0, version: 0 }),
+        set({ syncKey: null, lastSyncTime: 0, version: 0, dirty: true }),
       setLastSyncTime: (time) => set({ lastSyncTime: time }),
       setVersion: (v) => set({ version: v }),
+      setDirty: (dirty) => set({ dirty }),
     }),
     {
       name: storeKey.SyncStore,
@@ -77,7 +82,9 @@ export const useSyncStore = create<SyncState>()(
         syncKey: state.syncKey,
         lastSyncTime: state.lastSyncTime,
         version: state.version,
+        dirty: state.dirty,
       }),
     }
   )
 );
+

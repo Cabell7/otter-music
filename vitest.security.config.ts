@@ -6,6 +6,6 @@ export default defineConfig({
     "middleware": fileURLToPath(new URL("./functions/middleware", import.meta.url)),
     "@otter-music/shared": fileURLToPath(new URL("./shared/src/index.ts", import.meta.url)),
   } },
-  test: { environment: "node", include: ["functions/private.security.ts"] },
+  test: { environment: "node", include: ["functions/private.security.ts", "functions/metadata.test.ts"] },
 });
 

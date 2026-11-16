@@ -84,3 +84,15 @@ GD API and third-party streams may change, limit requests or be unavailable.
 Hosting this application does not grant rights to third-party recordings. Use
 authorized content and official services where needed; keep this deployment
 personal and do not redistribute music or expose a proxy.
+
+
+## Maintenance update (2026-11-16)
+
+Web cover and lyric lookup now uses GD directly. Authenticated /metadata endpoints
+provide fixed read-only NetEase playlist/album/artist metadata and allowlisted Billboard
+charts, with a one-hour Cache API cache. No audio or arbitrary URL relay is mounted.
+The podcast browser view explicitly reports its unavailable status.
+Automatic sync no longer polls: edits upload after four seconds, opening/foregrounding
+checks the cloud version, and Settings provides a manual sync button. Automatic sync
+is silent. Page-close upload is best effort; local pending edits remain for retry.
+Uploaded data can be fetched while the original device is offline.

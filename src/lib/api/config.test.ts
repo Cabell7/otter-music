@@ -60,7 +60,6 @@ describe("music api default route policy", () => {
   });
 
   it("returns the direct GD API when no custom URLs are configured", () => {
-    const proxiedUrl = `${getApiUrl()}/music-api`;
 
     expect(getMusicApiUrls()).toEqual([DEFAULT_MUSIC_API_URL]);
   });

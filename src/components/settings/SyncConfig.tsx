@@ -13,11 +13,13 @@ import {
 } from "../ui/drawer";
 import { Input } from "../ui/input";
 import { useSyncStore } from "@/store/sync-store";
+import { checkAndSync } from "@/lib/sync";
 import { SettingItem } from "./SettingItem";
 
 export function SyncConfig() {
   const { syncKey, lastSyncTime, setSyncKey, clearSyncConfig } = useSyncStore();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [inputKey, setInputKey] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -97,6 +99,7 @@ export function SyncConfig() {
             />
           </div>
           <DrawerFooter className="gap-2 pt-0">
+            {syncKey && <Button variant="outline" disabled={syncing} onClick={async () => { setSyncing(true); try { await checkAndSync(true); } finally { setSyncing(false); } }}><RefreshCw className="h-4 w-4 mr-2" />{syncing ? "同步中…" : "立即同步"}</Button>}
             {syncKey && (
               <Button
                 variant="outline"
@@ -116,3 +119,4 @@ export function SyncConfig() {
     </>
   );
 }
+

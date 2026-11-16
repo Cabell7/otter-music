@@ -3,8 +3,8 @@ import toast from "react-hot-toast";
 import { ApiError } from "@/lib/api/config";
 import { useMusicStore } from "@/store";
 import { useSyncStore } from "@/store/sync-store";
-import { syncPull, syncPushAndPull } from "@/lib/api/sync";
-import { checkAndSync } from "./sync";
+import { syncCheck, syncPull, syncPushAndPull } from "@/lib/api/sync";
+import { checkAndSync, refreshFromCloud } from "./sync";
 import type { MusicTrack } from "@/types/music";
 
 /* ---------------- mocks ---------------- */
@@ -435,5 +435,25 @@ describe("checkAndSync", () => {
     // 本地数据保留
     expect(useMusicStore.getState().favorites).toHaveLength(1);
     expect(toast.error).toHaveBeenCalledWith("网络超时，请稍后重试");
+  });
+});
+
+
+describe("foreground cloud check", () => {
+  beforeEach(() => { vi.clearAllMocks(); setupBaseState(); useSyncStore.setState({ version: 3, dirty: false }); });
+  it("does not pull or push when the version is unchanged", async () => {
+    vi.mocked(syncCheck).mockResolvedValue({ version: 3, lastSyncTime: 10 });
+    await refreshFromCloud();
+    expect(syncPull).not.toHaveBeenCalled(); expect(syncPushAndPull).not.toHaveBeenCalled();
+  });
+  it("merges a changed cloud snapshot without discarding pending local edits", async () => {
+    useMusicStore.setState({ favorites: [createTrack("local")], playlists: [] });
+    useSyncStore.setState({ dirty: true });
+    vi.mocked(syncCheck).mockResolvedValue({ version: 4, lastSyncTime: 11 });
+    vi.mocked(syncPull).mockResolvedValue({ data: { favorites: [createTrack("cloud")], playlists: [] }, version: 4, lastSyncTime: 11 });
+    await refreshFromCloud();
+    expect(useMusicStore.getState().favorites.map((t) => t.id).sort()).toEqual(["cloud", "local"]);
+    expect(useSyncStore.getState().dirty).toBe(true);
+    expect(syncPushAndPull).not.toHaveBeenCalled();
   });
 });

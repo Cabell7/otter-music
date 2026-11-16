@@ -2,7 +2,8 @@ import toast from "react-hot-toast";
 import { ApiError } from "@/lib/api/config";
 import { useSyncStore } from "@/store/sync-store";
 import { useMusicStore } from "@/store";
-import { syncPull, syncPushAndPull } from "@/lib/api/sync";
+import { syncCheck, syncPull, syncPushAndPull } from "@/lib/api/sync";
+import { getApiUrl } from "@/lib/api/config";
 import { MusicTrack, Playlist } from "@/types/music";
 import { cleanTrack } from "@/lib/utils/music";
 import { logger } from "./logger";
@@ -29,11 +30,14 @@ const getSnapshot = (): SyncSnapshot => {
   };
 };
 
+let applying = false;
+export const isApplyingSync = () => applying;
 const applySnapshot = (data: SyncSnapshot) => {
-  useMusicStore.setState({
+  applying = true;
+  try { useMusicStore.setState({
     favorites: data.favorites ?? [],
     playlists: data.playlists ?? [],
-  });
+  }); } finally { applying = false; }
 };
 
 /** LWW 合并：相同 id 保留 update_time 更大的版本，新增条目排在前 */
@@ -79,7 +83,14 @@ function mergeSnapshots(
  * - POST 推拉一体 + 乐观锁（version），失败不覆盖本地数据
  * - 409 冲突时先 pull 再合并重试
  */
-export async function checkAndSync(force = false): Promise<SyncResult> {
+let activeSync: Promise<SyncResult> | undefined;
+export function checkAndSync(force = false, silent = false): Promise<SyncResult> {
+  if (activeSync) return activeSync;
+  activeSync = performSync(force, silent).finally(() => { activeSync = undefined; });
+  return activeSync;
+}
+
+async function performSync(force = false, silent = false): Promise<SyncResult> {
   const {
     syncKey,
     lastSyncTime,
@@ -97,18 +108,22 @@ export async function checkAndSync(force = false): Promise<SyncResult> {
 
   try {
     // 一趟式 Push & Pull，后端执行 LWW 合并后返回权威全量数据
+    const sent = getSnapshot();
     const response = await syncPushAndPull<SyncSnapshot>(
       syncKey,
-      getSnapshot(),
+      sent,
       version
     );
 
     // 无条件信任服务端合并后的权威结果
-    applySnapshot(mergeSnapshots(response.data, getSnapshot()));
+    const current = getSnapshot();
+    const changed = JSON.stringify(sent) !== JSON.stringify(current);
+    applySnapshot(mergeSnapshots(response.data, current));
+    useSyncStore.getState().setDirty(changed);
     setLastSyncTime(response.lastSyncTime);
     setVersion(response.version);
 
-    toast.success(
+    if (!silent) toast.success(
       response.lastSyncTime > lastSyncTime ? "已同步云端新数据" : "同步成功"
     );
     return { success: true };
@@ -116,7 +131,7 @@ export async function checkAndSync(force = false): Promise<SyncResult> {
     // 404：syncKey 不存在或已删除
     if (err instanceof ApiError && err.status === 404) {
       clearSyncConfig();
-      toast.error("同步密钥不存在或已失效");
+      if (!silent) toast.error("同步密钥不存在或已失效");
       return { success: false, error: "密钥失效" };
     }
 
@@ -131,10 +146,13 @@ export async function checkAndSync(force = false): Promise<SyncResult> {
             merged,
             pullRes.version
           );
-          applySnapshot(mergeSnapshots(retryRes.data, getSnapshot()));
+          const current = getSnapshot();
+          const changed = JSON.stringify(merged) !== JSON.stringify(current);
+          applySnapshot(mergeSnapshots(retryRes.data, current));
+          useSyncStore.getState().setDirty(changed);
           setLastSyncTime(retryRes.lastSyncTime);
           setVersion(retryRes.version);
-          toast.success("同步成功");
+          if (!silent) toast.success("同步成功");
           return { success: true };
         }
       } catch {
@@ -144,7 +162,31 @@ export async function checkAndSync(force = false): Promise<SyncResult> {
 
     // POST 失败 → 服务端状态未知，不覆盖本地数据
     logger.error("Sync", "Sync failed", err);
-    toast.error("网络超时，请稍后重试");
+    if (!silent) toast.error("网络超时，请稍后重试");
     return { success: false, error: "网络超时" };
   }
+}
+
+// Foreground checks do not write unchanged data. Local changes are pushed separately.
+export async function refreshFromCloud(): Promise<void> {
+  const state = useSyncStore.getState();
+  if (!state.syncKey) return;
+  try {
+    const check = await syncCheck(state.syncKey);
+    if (check.version <= useSyncStore.getState().version) return;
+    const pull = await syncPull<SyncSnapshot>(state.syncKey);
+    if (state.syncKey !== useSyncStore.getState().syncKey) return;
+    applySnapshot(mergeSnapshots(pull.data, getSnapshot()));
+    useSyncStore.getState().setVersion(pull.version);
+    useSyncStore.getState().setLastSyncTime(pull.lastSyncTime);
+  } catch (err) { logger.warn("Sync", "Cloud check failed", err); }
+}
+
+// A best-effort upload during navigation; dirty stays set until a confirmed sync.
+export function flushSyncOnPageHide(): void {
+  const { syncKey, version, dirty } = useSyncStore.getState();
+  if (!syncKey || !dirty) return;
+  const body = JSON.stringify({ data: getSnapshot(), clientVersion: version });
+  if (new TextEncoder().encode(body).length > 60_000) return;
+  void fetch(`${getApiUrl()}/sync/v2`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${syncKey}` }, body, keepalive: true }).catch(() => {});
 }

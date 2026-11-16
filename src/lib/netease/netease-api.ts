@@ -40,7 +40,7 @@ import {
 } from "./netease-normalize";
 import { MusicTrack } from "@/types/music";
 import { cachedFetch } from "@/lib/utils/cache";
-import { getApiUrl, IS_NATIVE } from "@/lib/api/config";
+import { getApiUrl, IS_NATIVE, unwrap } from "@/lib/api/config";
 import { CapacitorHttp } from "@capacitor/core";
 import { useNeteaseStore } from "@/store/netease-store";
 import { logger } from "@/lib/logger";
@@ -54,6 +54,12 @@ const BASE_URL =
   import.meta.env.DEV && !IS_NATIVE ? "/api/netease" : "https://music.163.com"; // Web端，且开发环境，指向本地 Vite 代理
 
 const NETWORK_TIMEOUT_MS = 12000;
+
+async function webMetadata<T>(kind: string, params: Record<string, string> = {}): Promise<T> {
+  const query = new URLSearchParams(params);
+  return unwrap<T>(await fetch(`${getApiUrl()}/metadata/netease/${kind}?${query}`));
+}
+
 
 type WrappedNeteaseResponse<T> = {
   data: T;
@@ -348,7 +354,10 @@ export const getRecommendPlaylists = async (
   const res = await cachedFetch<MarketPlaylist[]>(
     `netease:v2:recommend:${finalCookie.slice(-16)}`,
     async () => {
-      // 直连
+      if (!IS_NATIVE) {
+        const r = await webMetadata<{ result: RecommendPlaylist[] }>("recommend");
+        return (r.result || []).map(toMarketPlaylistFromRecommend);
+      }
       const r = await requestWeapi<{ result: RecommendPlaylist[] }>(
         `${BASE_URL}/weapi/personalized/playlist`,
         { limit: 20, total: true, n: 1000 },
@@ -366,6 +375,7 @@ export const getPlaylistDetail = (playlistId: string, cookie: string = "") => {
   return cachedFetch<PlaylistDetail>(
     `netease:playlist:${playlistId}`,
     async () => {
+      if (!IS_NATIVE) return webMetadata<PlaylistDetail>("playlist", { id: realId });
       const finalCookie = resolveRequestCookie(cookie);
       const res = await requestWeapi<{
         playlist: PlaylistDetail & { trackIds: { id: number }[] };
@@ -592,6 +602,10 @@ export const getToplist = async (
   const res = await cachedFetch<MarketPlaylist[]>(
     `netease:v2:toplist:${finalCookie.slice(-16)}`,
     async () => {
+      if (!IS_NATIVE) {
+        const r = await webMetadata<{ list: Toplist[] }>("toplist");
+        return r.list.map(toMarketPlaylistFromToplist);
+      }
       const r = await requestWeapi<{ list: Toplist[] }>(
         `${BASE_URL}/weapi/toplist/detail`,
         {},
@@ -608,6 +622,7 @@ export const getAlbum = (id: string, cookie: string = "") =>
   cachedFetch(
     `netease:album:${id.replace(/^(nealbum_|ne_album_)/, "")}`,
     async () => {
+      if (!IS_NATIVE) return webMetadata<AlbumDetail>("album", { id: id.replace(/^(nealbum_|ne_album_)/, "") });
       const finalCookie = resolveRequestCookie(cookie);
       const res = await requestWeapi<AlbumDetail>(
         `${BASE_URL}/weapi/v1/album/${id.replace(/^(nealbum_|ne_album_)/, "")}`,
@@ -645,6 +660,7 @@ export const getArtist = (id: string, cookie: string = "") =>
   cachedFetch(
     `netease:artist:${id.replace(/^(neartist_|ne_artist_)/, "")}`,
     async () => {
+      if (!IS_NATIVE) return webMetadata<ArtistDetail>("artist", { id: id.replace(/^(neartist_|ne_artist_)/, "") });
       const finalCookie = resolveRequestCookie(cookie);
       const res = await requestWeapi<ArtistDetail>(
         `${BASE_URL}/weapi/v1/artist/${id.replace(/^(neartist_|ne_artist_)/, "")}`,
@@ -834,6 +850,10 @@ export const getPlaylists = (
   cachedFetch(
     `netease:playlists:${cat}:${order}:${limit}:${offset}`,
     async () => {
+      if (!IS_NATIVE) {
+        const res = await webMetadata<{ playlists: UserPlaylist[] }>("playlists", { cat, order, limit: String(limit), offset: String(offset) });
+        return res.playlists.map(toMarketPlaylistFromUserPlaylist);
+      }
       const finalCookie = resolveRequestCookie(cookie);
       const res = await requestWeapi<{ playlists: UserPlaylist[] }>(
         `${BASE_URL}/weapi/playlist/list`,

@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/health", "/auth/*", "/sync/*", "/proxy", "/proxy/*", "/music-api", "/music-api/*", "/podcast-api", "/podcast-api/*", "/api/*", "/update", "/update/*"],
+  "include": ["/health", "/metadata/*", "/auth/*", "/sync/*", "/proxy", "/proxy/*", "/music-api", "/music-api/*", "/podcast-api", "/podcast-api/*", "/api/*", "/update", "/update/*"],
   "exclude": []
 }

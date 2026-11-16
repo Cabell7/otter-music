@@ -45,6 +45,7 @@ export class NeteaseProvider extends BaseMusicProvider {
   }
 
   async getPic(track: MusicTrack, size: number = 800): Promise<string | null> {
+    if (!IS_NATIVE) return super.getPic(track, size);
     try {
       const song = await getSongDetail(track.id);
       const url = song?.al?.picUrl;
@@ -56,6 +57,7 @@ export class NeteaseProvider extends BaseMusicProvider {
   }
 
   async getLyric(track: MusicTrack): Promise<SongLyric | null> {
+    if (!IS_NATIVE) return super.getLyric(track);
     try {
       const res = await neteaseGetLyric(track.id);
       if (!res || !res.data) return { lyric: "", tlyric: "" };
