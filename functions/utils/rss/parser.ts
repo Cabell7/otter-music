@@ -49,7 +49,7 @@ export async function streamParseRss(stream: ReadableStream<Uint8Array>, feedUrl
     const rawText = textBuffer; // 此时的 textBuffer 是原始字符串
 
     if (name === 'item' || name === 'entry') {
-      if (currentEp?.title && currentEp?.audioUrl) {
+      if (currentEp?.title && currentEp?.audioUrl && count < MAX_EPISODES) {
         feed.episodes.push({
           id: (currentEp.id || currentEp.audioUrl || currentEp.title || '').slice(0, 200),
           title: stripHtml(currentEp.title),
@@ -61,6 +61,7 @@ export async function streamParseRss(stream: ReadableStream<Uint8Array>, feedUrl
         });
         count++;
         if (count >= MAX_EPISODES) isDone = true;
+
       }
       currentEp = null;
     }
@@ -95,7 +96,7 @@ export async function streamParseRss(stream: ReadableStream<Uint8Array>, feedUrl
     // 【核心】阻断网络连接，释放内存
     if (!isDone) await reader.cancel(); 
     else await reader.cancel('Max episodes reached');
-    parser.close();
+    if (!isDone) parser.close();
   }
 
   return feed;
