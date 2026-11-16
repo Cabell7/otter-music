@@ -26,4 +26,17 @@ describe("private metadata", () => {
     expect((await detail.json() as any).data.tracks).toEqual([]);
     expect((await app.request("https://music.test/metadata/billboard?chart=hot-100", { headers }, env)).status).toBe(200);
   });
+  it("limits podcast fetches to fixed sources and rejects redirects", async () => {
+    const cookie = `site=${await signSiteJWT(password)}`;
+    const headers = { Cookie: cookie };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('<rss><channel><title>Feed</title><item><title>Episode</title><enclosure url="https://media.example/ep.mp3"/></item></channel></rss>', {status: 200}));
+    expect((await app.request("https://music.test/metadata/podcast?source=https://example.com", {headers}, env)).status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const res = await app.request("https://music.test/metadata/podcast?source=default-zx7", {headers}, env);
+    expect(res.status).toBe(200);
+    expect((await res.json() as any).data.episodes[0].title).toBe("Episode");
+    expect(fetchSpy).toHaveBeenCalledWith("https://feed.xyzfm.space/wb39te6k9gqw", expect.objectContaining({redirect: "error"}));
+    fetchSpy.mockRestore();
+  });
+
 });

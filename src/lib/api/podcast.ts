@@ -1,3 +1,4 @@
+import { DEFAULT_RSS_SOURCES } from "@/types/podcast";
 import type { PodcastFeed, SearchPodcastItem } from "@/types/podcast";
 import type { HttpOptions } from "@capacitor/core";
 import { getApiUrl, IS_NATIVE } from ".";
@@ -450,8 +451,12 @@ export const parsePodcastRss = async (
       }
     }
 
-    // Web 端：后端代理
-    return fetchPodcastRssViaProxy(normalizedUrl, signal);
+    // Web 端只允许读取内置播客，服务器按固定 ID 选择来源。
+    const source = DEFAULT_RSS_SOURCES.find((item) => item.rssUrl === normalizedUrl);
+    if (!source) throw new Error("网页端仅支持内置播客，暂不支持自定义 RSS");
+    const res = await fetch(`${getApiUrl()}/metadata/podcast?source=${encodeURIComponent(source.id)}`, { signal });
+    const json = await parseJson(res);
+    return (json.data as PodcastFeed | undefined) ?? null;
   };
 
   const cached = await cachedFetch<PodcastFeed>(

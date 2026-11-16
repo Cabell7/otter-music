@@ -160,7 +160,7 @@ export const musicApi = {
   ): Promise<string | null> {
     if (idOrUrl.startsWith("http") && source !== "bilibili") return idOrUrl;
     // v2：咪咕封面由相对路径改为补全 CDN 域名，旧缓存需作废，避免继续命中失效地址
-    const key = `pic:v2:${source}:${idOrUrl}:${size}`;
+    const key = `pic:v3:${source}:${idOrUrl}:${size}`;
     return cachedFetch<string | null>(
       key,
       async () => {
@@ -182,7 +182,7 @@ export const musicApi = {
   /* ---------------- 歌词 ---------------- */
 
   async getLyric(id: string, source: MusicSource): Promise<SongLyric | null> {
-    const key = `lyric:${source}:${id}`;
+    const key = `lyric:v2:${source}:${id}`;
 
     return cachedFetch<SongLyric | null>(
       key,

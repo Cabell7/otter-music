@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../types/hono";
 import { verifySiteJWT } from "../utils/auth";
 import { getPlaylists, getPlaylistDetail, getRecommendPlaylists, getToplist, getAlbum, getArtist } from "../utils/music/netease-api";
+import { streamParseRss } from "../utils/rss/parser";
 import { getFromCache, putToCache } from "../utils/cache";
 import { BILLBOARD_CHART_SLUGS, fetchBillboardChart } from "../utils/music/billboard-api";
 
@@ -50,4 +51,35 @@ metadataRoutes.get("/billboard", async (c) => {
   if (!(BILLBOARD_CHART_SLUGS as readonly string[]).includes(chart) || (date && !/^\d{4}-\d{2}-\d{2}$/.test(date))) return c.json({ error: "Invalid parameters" }, 400);
   try { return c.json({ success: true, data: await fetchBillboardChart(chart, date) }); }
   catch { return c.json({ error: "Chart unavailable" }, 502); }
+});
+
+// Fixed sources only; redirects are rejected so the worker never follows an arbitrary URL.
+const PODCAST_FEEDS: Record<string, string> = {
+  "default-zx7": "https://feed.xyzfm.space/wb39te6k9gqw",
+  "default-shengcoffee": "https://www.ximalaya.com/album/51076156.xml",
+  "default-bnt": "https://feed.xyzfm.space/vylham8uw3ay",
+  "default-zhixing": "https://feed.xyzfm.space/j8yp8gxkmgqr",
+  "default-wrzhx": "https://feed.xyzfm.space/ypn9dydpbxpc",
+  "default-xsfgs": "https://feed.xyzfm.space/76evp7fxkeu8",
+  "default-yzhs": "https://feed.xyzfm.space/hwen8wf69c6g",
+  "default-daily": "https://feeds.simplecast.com/54nAGcIl",
+  "default-ted-daily": "https://feeds.acast.com/public/shows/67587e77c705e441797aff96",
+};
+metadataRoutes.get("/podcast", async (c) => {
+  const source = c.req.query("source") || "";
+  const url = Object.hasOwn(PODCAST_FEEDS, source) ? PODCAST_FEEDS[source] : undefined;
+  if (!url) return c.json({ error: "Unknown podcast source" }, 400);
+  try {
+    const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(15000), headers: { accept: "application/rss+xml, application/xml, text/xml", "user-agent": "OtterMusic/2.0" } });
+    if (!response.ok || !response.body) return c.json({ error: "Podcast unavailable" }, 502);
+    let bytes = 0;
+    const limited = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        bytes += chunk.byteLength;
+        if (bytes > 2 * 1024 * 1024) throw new Error("Feed too large");
+        controller.enqueue(chunk);
+      },
+    }));
+    return c.json({ success: true, data: await streamParseRss(limited, url) });
+  } catch { return c.json({ error: "Podcast unavailable" }, 502); }
 });

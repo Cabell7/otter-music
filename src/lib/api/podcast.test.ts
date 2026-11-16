@@ -270,23 +270,15 @@ describe("parsePodcastRss", () => {
     expect(warnMock).not.toHaveBeenCalled();
   });
 
-  it("Web 端仅走代理", async () => {
+  it("Web 端通过固定 ID 读取内置播客", async () => {
     const { requestMock, fetchMock } = setupMocks();
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ success: true, data: mockFeed }), {
-        status: 200,
-      })
-    );
-
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true, data: mockFeed }), { status: 200 }));
     const parsePodcastRss = await importParsePodcastRss(false);
-    const result = await parsePodcastRss("https://example.com/feed.xml");
-
+    const result = await parsePodcastRss("https://feed.xyzfm.space/wb39te6k9gqw");
     expect(requestMock).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://otter-music.pages.dev/podcast-api/rss?url=https%3A%2F%2Fexample.com%2Ffeed.xml",
-      expect.anything()
-    );
+    expect(fetchMock).toHaveBeenCalledWith("https://otter-music.pages.dev/metadata/podcast?source=default-zx7", expect.anything());
     expect(result.name).toBe("Test Podcast");
+    await expect(parsePodcastRss("https://example.com/feed.xml")).rejects.toThrow("网页端仅支持内置播客");
   });
 
   it("代理返回空数据时抛出解析失败", async () => {
@@ -299,7 +291,7 @@ describe("parsePodcastRss", () => {
 
     const parsePodcastRss = await importParsePodcastRss(false);
     await expect(
-      parsePodcastRss("https://example.com/feed.xml")
+      parsePodcastRss("https://feed.xyzfm.space/wb39te6k9gqw")
     ).rejects.toThrow("RSS 解析失败");
   });
 });
