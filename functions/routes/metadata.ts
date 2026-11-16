@@ -73,22 +73,23 @@ metadataRoutes.get("/podcast", async (c) => {
     const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(15000), headers: { accept: "application/rss+xml, application/xml, text/xml", "user-agent": "OtterMusic/2.0" } });
     if (!response.ok || !response.body) return c.json({ error: "Podcast unavailable" }, 502);
     const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > 2 * 1024 * 1024) {
-        void reader.cancel();
-        return c.json({ error: "Podcast feed too large" }, 502);
-      }
-      chunks.push(value);
-    }
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    const body = new Response(bytes).body!;
-    return c.json({ success: true, data: await streamParseRss(body, url) });
+    let bytes = 0;
+    const limited = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          const result = await reader.read();
+          if (result.done) { controller.close(); return; }
+          bytes += result.value.byteLength;
+          if (bytes > 4 * 1024 * 1024) {
+            void reader.cancel().catch(() => {});
+            controller.error(new Error("Feed too large"));
+            return;
+          }
+          controller.enqueue(result.value);
+        } catch (error) { controller.error(error); }
+      },
+      cancel() { void reader.cancel().catch(() => {}); },
+    });
+    return c.json({ success: true, data: await streamParseRss(limited, url) });
   } catch { return c.json({ error: "Podcast unavailable" }, 502); }
 });

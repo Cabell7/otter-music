@@ -12,3 +12,15 @@ it("handles a feed cut off at the episode limit", async () => {
   const feed = await streamParseRss(stream, "https://feed.test/");
   expect(feed.episodes).toHaveLength(20);
 });
+
+it("stops reading a feed over 2 MB after its first 20 episodes", async () => {
+  let reads = 0;
+  const prefix = `<rss><channel>${Array.from({length:20}, (_, i) => `<item><title>${i}</title><enclosure url="https://x.test/a.mp3"/></item>`).join("")}`;
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) { reads++; if (reads === 1) controller.enqueue(encoder.encode(prefix)); else controller.enqueue(new Uint8Array(3 * 1024 * 1024)); },
+  }, { highWaterMark: 0 });
+  const feed = await streamParseRss(stream, "https://feed.test/");
+  expect(feed.episodes).toHaveLength(20);
+  expect(reads).toBe(1);
+});

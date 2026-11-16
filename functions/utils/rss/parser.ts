@@ -17,6 +17,7 @@ export async function streamParseRss(stream: ReadableStream<Uint8Array>, feedUrl
   let isDone = false;
 
   parser.onopentag = (node) => {
+    if (isDone) return;
     textBuffer = '';
     const name = node.name.toLowerCase();
     
@@ -41,10 +42,11 @@ export async function streamParseRss(stream: ReadableStream<Uint8Array>, feedUrl
     }
   };
 
-  parser.ontext = (t) => { textBuffer += t; };
-  parser.oncdata = (t) => { textBuffer += t; }; // 处理 CDATA
+  parser.ontext = (t) => { if (!isDone) textBuffer += t; };
+  parser.oncdata = (t) => { if (!isDone) textBuffer += t; }; // 处理 CDATA
 
   parser.onclosetag = (tagName) => {
+    if (isDone) return;
     const name = tagName.toLowerCase();
     const rawText = textBuffer; // 此时的 textBuffer 是原始字符串
 
@@ -91,13 +93,11 @@ export async function streamParseRss(stream: ReadableStream<Uint8Array>, feedUrl
       parser.write(decoder.decode(value, { stream: true }));
     }
   } catch (err) {
-    console.warn('Stream parsing interrupted or failed:', err);
-  } finally {
-    // 【核心】阻断网络连接，释放内存
-    if (!isDone) await reader.cancel(); 
-    else await reader.cancel('Max episodes reached');
-    if (!isDone) parser.close();
+    void reader.cancel().catch(() => {});
+    throw err;
   }
+  if (isDone) void reader.cancel('Max episodes reached').catch(() => {});
+  else parser.close();
 
   return feed;
 }
