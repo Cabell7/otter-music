@@ -13,3 +13,15 @@ export async function signJWT(secret: string) {
 export async function verifyJWT(token: string, secret: string) {
   return jwtVerify(token, encoder.encode(secret), { algorithms: ["HS256"], subject: "admin" });
 }
+
+export async function signSiteJWT(secret: string) {
+  return new SignJWT({ sub: "site" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("90d")
+    .sign(encoder.encode(secret));
+}
+
+export async function verifySiteJWT(token: string, secret: string) {
+  return jwtVerify(token, encoder.encode(secret), { algorithms: ["HS256"], subject: "site" });
+}

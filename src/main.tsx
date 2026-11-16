@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './assets/global.css'
 import RootLayout from './Layout'
 import App from './App'
+import { SiteGate } from './components/SiteGate'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { initializeLogger } from './lib/logger'
 
@@ -12,8 +13,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <RootLayout>
-        <App />
+        <SiteGate><App /></SiteGate>
       </RootLayout>
     </ErrorBoundary>
   </StrictMode>,
 )
+

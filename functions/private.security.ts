@@ -75,3 +75,35 @@ describe("private deployment", () => {
     expect(roundtrip.data.data.favorites.length).toBe(1001);
   });
 });
+
+describe("site session", () => {
+  it("requires the password, returns the existing key, and never grants admin rights", async () => {
+    const f = fixture();
+    const key = "private_ABCDEFGHJKLMNPQR";
+    f.kv.list.mockResolvedValue({ keys: [{ name: `sync:${key}` }], list_complete: true });
+    const prefix = (await import("@otter-music/shared")).SYNC_KEY_PREFIX;
+    f.kv.list.mockResolvedValue({ keys: [{ name: `${prefix}${key}` }], list_complete: true });
+    const login = (password: string) => f.request("/auth/site-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+    expect((await login("wrong")).status).toBe(401);
+    const response = await login(password);
+    expect(response.status).toBe(200);
+    expect((await response.json() as any).data.syncKey).toBe(key);
+    const cookie = response.headers.get("set-cookie")!;
+    expect(cookie).toMatch(/HttpOnly; Secure; SameSite=Strict; Max-Age=7776000/);
+    expect((await f.request("/auth/session", { headers: { Cookie: cookie } })).status).toBe(200);
+    expect((await f.request("/sync/v2/keys", { headers: { Cookie: cookie } })).status).toBe(401);
+    const forgedAdminCookie = cookie.replace(/^site=/, "auth=");
+    expect((await f.request("/sync/v2/keys", { headers: { Cookie: forgedAdminCookie } })).status).toBe(401);
+    expect((await f.request("/auth/site-logout", { method: "POST" })).headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(f.kv.put).not.toHaveBeenCalled();
+  });
+  it("fails closed when the private key is missing or ambiguous", async () => {
+    const f = fixture();
+    const login = () => f.request("/auth/site-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+    expect((await login()).status).toBe(503);
+    f.kv.list.mockResolvedValue({ keys: [{ name: "one" }, { name: "two" }], list_complete: true });
+    expect((await login()).status).toBe(503);
+    expect(f.kv.put).not.toHaveBeenCalled();
+  });
+});
+
