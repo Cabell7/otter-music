@@ -184,14 +184,24 @@ export function LyricsPanel({ track, active = true }: LyricsPanelProps) {
 
     if (!container) return;
 
+    const interrupt = () => {
+      isAutoScrollingRef.current = false;
+    };
+    const root = container.parentElement;
+    root?.addEventListener("pointerdown", interrupt);
+    root?.addEventListener("wheel", interrupt);
+    root?.addEventListener("keydown", interrupt);
     container.addEventListener("scroll", handleScroll, {
       passive: true,
     });
 
     return () => {
       container.removeEventListener("scroll", handleScroll);
+      root?.removeEventListener("pointerdown", interrupt);
+      root?.removeEventListener("wheel", interrupt);
+      root?.removeEventListener("keydown", interrupt);
     };
-  }, [handleScroll]);
+  }, [handleScroll, loading, error, trackId]);
 
   useEffect(() => {
     if (!trackId || !source || !active) return;
@@ -244,15 +254,25 @@ export function LyricsPanel({ track, active = true }: LyricsPanelProps) {
   }, [trackId, lyricId, source, active]);
 
   useEffect(() => {
-    if (isUserScrolling) return;
+    if (!active || isUserScrolling) return;
 
     const container = viewportRef.current;
     const el = lineRefs.current[activeIndex];
 
     if (!container || !el) return;
 
-    const offset =
-      el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2;
+    const viewport = container.getBoundingClientRect();
+    const line = el.getBoundingClientRect();
+    const target =
+      container.scrollTop +
+      line.top -
+      viewport.top +
+      (line.height - viewport.height) / 2;
+    const offset = Math.max(
+      0,
+      Math.min(target, container.scrollHeight - container.clientHeight)
+    );
+    if (Math.abs(container.scrollTop - offset) < 1) return;
 
     isAutoScrollingRef.current = true;
 
@@ -265,15 +285,25 @@ export function LyricsPanel({ track, active = true }: LyricsPanelProps) {
       isAutoScrollingRef.current = false;
     };
 
+    const fallback = setTimeout(onScrollEnd, 800);
     container.addEventListener("scrollend", onScrollEnd, {
       once: true,
     });
 
     return () => {
       isAutoScrollingRef.current = false;
+      clearTimeout(fallback);
       container.removeEventListener("scrollend", onScrollEnd);
     };
-  }, [activeIndex, isUserScrolling]);
+  }, [
+    active,
+    activeIndex,
+    isUserScrolling,
+    lyrics,
+    loading,
+    error,
+    lyricFontSize,
+  ]);
 
   useEffect(() => {
     flushSync(() => {

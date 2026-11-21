@@ -8,6 +8,7 @@ import { useOfflineStore } from "@/store/offline-store";
 import { MediaSession } from "@jofr/capacitor-media-session";
 import toast from "react-hot-toast";
 import { handleAutoMatch, isNeteaseSampleClip } from "@/lib/audio-match";
+import { IS_NATIVE } from "@/lib/api/config";
 import { logger } from "@/lib/logger";
 
 const PAUSE_CONFIRM_DELAY_MS = 200;
@@ -48,6 +49,31 @@ export function useAudioEventHandlers(
 
     const clearPauseTimer = () => {
       if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+    };
+
+    let interruptedSource: string | null = null;
+    const resumeAfterInterruption = () => {
+      if (document.hidden || !interruptedSource) return;
+      const source = interruptedSource;
+      interruptedSource = null;
+      if (
+        audio.src !== source ||
+        !audio.paused ||
+        audio.ended ||
+        audio.error ||
+        isSwitchingTrackRef.current
+      )
+        return;
+      clearPauseTimer();
+      void audio.play().catch((error) => {
+        logger.warn(
+          "useAudioEventHandlers",
+          "Could not resume interrupted audio",
+          error
+        );
+        if (audio.src === source && audio.paused)
+          getMusicState().setIsPlaying(false);
+      });
     };
 
     const handlers: Record<string, EventListener> = {
@@ -122,6 +148,13 @@ export function useAudioEventHandlers(
 
         clearPauseTimer();
         const state = getMusicState();
+        interruptedSource =
+          !IS_NATIVE &&
+          document.hidden &&
+          state.isPlaying &&
+          !useAppStore.getState().allowSimultaneousPlayback
+            ? audio.src
+            : null;
 
         // pause 事件触发时 store 仍为播放中 ⇒ 非用户发起(如其他应用抢占音频焦点)
         if (
@@ -146,6 +179,7 @@ export function useAudioEventHandlers(
       },
 
       play: () => {
+        interruptedSource = null;
         clearPauseTimer();
         toggleLoading(false);
         if (audio.paused) return;
@@ -198,7 +232,10 @@ export function useAudioEventHandlers(
         }
       },
 
-      loadstart: () => toggleLoading(true),
+      loadstart: () => {
+        interruptedSource = null;
+        toggleLoading(true);
+      },
       waiting: () => toggleLoading(true),
       canplay: () => toggleLoading(false),
       playing: () => {
@@ -212,7 +249,14 @@ export function useAudioEventHandlers(
       audio.addEventListener(event, handler)
     );
 
+    document.addEventListener("visibilitychange", resumeAfterInterruption);
+    window.addEventListener("focus", resumeAfterInterruption);
+    window.addEventListener("pageshow", resumeAfterInterruption);
+
     return () => {
+      document.removeEventListener("visibilitychange", resumeAfterInterruption);
+      window.removeEventListener("focus", resumeAfterInterruption);
+      window.removeEventListener("pageshow", resumeAfterInterruption);
       clearPauseTimer();
       Object.entries(handlers).forEach(([event, handler]) =>
         audio.removeEventListener(event, handler)

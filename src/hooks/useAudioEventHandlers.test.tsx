@@ -103,6 +103,29 @@ describe("useAudioEventHandlers pause confirm", () => {
     };
   };
 
+  it("resumes a background interruption once when the page returns", async () => {
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    useAppStore.setState({ allowSimultaneousPlayback: false });
+    const { audio, setPaused, cleanup } = setup();
+    audio.src = "https://music.test/track.mp3";
+    const play = vi.spyOn(audio, "play").mockResolvedValue();
+    try {
+      setPaused(true);
+      audio.dispatchEvent(new Event("pause"));
+      vi.advanceTimersByTime(200);
+      expect(useMusicStore.getState().isPlaying).toBe(false);
+      expect(play).not.toHaveBeenCalled();
+
+      hidden.mockReturnValue(false);
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+      expect(play).toHaveBeenCalledTimes(1);
+    } finally {
+      hidden.mockRestore();
+      cleanup();
+    }
+  });
+
   it("does not set isPlaying=false if play resumes within 200ms", () => {
     const { audio, setPaused, cleanup } = setup();
 
