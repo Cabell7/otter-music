@@ -120,20 +120,39 @@ for (const [key, endpoint] of endpoints) {
         signal: AbortSignal.timeout(8000),
       });
       const type = upstream.headers.get("Content-Type") ?? "";
+      if (!upstream.ok) {
+        return c.json(
+          {
+            error: "Music source unavailable",
+            reason: "upstream_http",
+            upstreamStatus: upstream.status,
+          },
+          424
+        );
+      }
       if (
-        !upstream.ok ||
         !/^(application\/(json|javascript|x-javascript)|text\/(plain|javascript))(?:;|$)/i.test(
           type
         )
       ) {
-        return c.json({ error: "Music source unavailable" }, 502);
+        return c.json(
+          {
+            error: "Music source unavailable",
+            reason: "upstream_content_type",
+          },
+          424
+        );
       }
       // Fetch only API payloads. The browser downloads audio from the resulting CDN URL.
       return c.body(upstream.body, 200, {
         "Content-Type": "text/plain; charset=utf-8",
       });
-    } catch {
-      return c.json({ error: "Music source unavailable" }, 502);
+    } catch (error) {
+      const reason =
+        error instanceof Error && error.name === "TimeoutError"
+          ? "upstream_timeout"
+          : "upstream_fetch_failed";
+      return c.json({ error: "Music source unavailable", reason }, 424);
     }
   });
 }
