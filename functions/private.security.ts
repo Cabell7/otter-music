@@ -46,13 +46,11 @@ describe("private deployment", () => {
   it("serves authenticated source lookups without mounting audio relay paths", async () => {
     const { request } = fixture();
     const path = "/api/bilibili/x/player/playurl?bvid=BV123&cid=1";
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response('{"code":0}', {
-          headers: { "Content-Type": "application/json" },
-        })
-      );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response('{"code":0}', {
+        headers: { "Content-Type": "application/json" },
+      })
+    );
     try {
       expect((await request(path)).status).toBe(401);
       const headers = { Cookie: `site=${await signSiteJWT(password)}` };
@@ -70,6 +68,34 @@ describe("private deployment", () => {
         new URL("https://api.bilibili.com/x/player/playurl?bvid=BV123&cid=1"),
         expect.objectContaining({ redirect: "manual" })
       );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("retries Bilibili search once with a server-issued visitor session", async () => {
+    const { request } = fixture();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 412 }))
+      .mockResolvedValueOnce(
+        Response.json({ data: { b_3: "visitor-3", b_4: "visitor-4" } })
+      )
+      .mockImplementationOnce(async (_url, init) => {
+        expect(new Headers(init?.headers).get("Cookie")).toBe(
+          "buvid3=visitor-3; buvid4=visitor-4"
+        );
+        return Response.json({ code: 0 });
+      });
+    try {
+      const response = await request(
+        "/api/bilibili/x/web-interface/search/type?keyword=Jay",
+        {
+          headers: { Cookie: `site=${await signSiteJWT(password)}` },
+        }
+      );
+      expect(await response.json()).toEqual({ code: 0 });
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
     } finally {
       fetchSpy.mockRestore();
     }

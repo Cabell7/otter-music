@@ -112,14 +112,49 @@ for (const [key, endpoint] of endpoints) {
     }
 
     try {
-      const upstream = await fetch(target, {
+      const request: RequestInit = {
         method,
         headers,
         body,
         // Workers rejects redirect: "error" before sending the request.
         redirect: "manual",
         signal: AbortSignal.timeout(8000),
-      });
+      };
+      let upstream = await fetch(target, request);
+      if (
+        isBili &&
+        target.pathname === "/x/web-interface/search/type" &&
+        upstream.status === 412
+      ) {
+        await upstream.body?.cancel();
+        const visitor = await fetch(bili + "/x/frontend/finger/spi", {
+          headers: {
+            Referer: headers.get("Referer")!,
+            "User-Agent": headers.get("User-Agent")!,
+          },
+          redirect: "manual",
+          signal: request.signal,
+        });
+        if (
+          visitor.ok &&
+          visitor.headers.get("Content-Type")?.startsWith("application/json")
+        ) {
+          const payload: { data?: { b_3?: string; b_4?: string } } =
+            await visitor.json();
+          const { b_3, b_4 } = payload.data ?? {};
+          if (
+            b_3 &&
+            b_4 &&
+            /^[a-zA-Z0-9_-]{1,256}$/.test(b_3) &&
+            /^[a-zA-Z0-9_-]{1,256}$/.test(b_4)
+          ) {
+            headers.set("Cookie", `buvid3=${b_3}; buvid4=${b_4}`);
+            upstream = await fetch(target, request);
+          }
+        } else {
+          await visitor.body?.cancel();
+        }
+      }
       const type = upstream.headers.get("Content-Type") ?? "";
       if (!upstream.ok) {
         return c.json(
