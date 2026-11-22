@@ -116,7 +116,8 @@ for (const [key, endpoint] of endpoints) {
         method,
         headers,
         body,
-        redirect: "error",
+        // Workers rejects redirect: "error" before sending the request.
+        redirect: "manual",
         signal: AbortSignal.timeout(8000),
       });
       const type = upstream.headers.get("Content-Type") ?? "";

@@ -68,7 +68,7 @@ describe("private deployment", () => {
       });
       expect(fetchSpy).toHaveBeenCalledExactlyOnceWith(
         new URL("https://api.bilibili.com/x/player/playurl?bvid=BV123&cid=1"),
-        expect.objectContaining({ redirect: "error" })
+        expect.objectContaining({ redirect: "manual" })
       );
     } finally {
       fetchSpy.mockRestore();
