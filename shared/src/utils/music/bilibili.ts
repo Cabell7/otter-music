@@ -369,10 +369,17 @@ export function parseBilibiliSearchResponse(
     (item) => item.type === "video" && item.bvid
   );
   const total = response.data?.numResults || 0;
+  const totalPages = response.data?.numPages;
+  const hasMore =
+    totalPages === undefined
+      ? total > 0
+        ? page * rows < total
+        : videos.length >= rows
+      : page < totalPages;
 
   return {
     items: videos.map(convertBilibiliSearchVideoToMusicTrack),
-    hasMore: total > 0 ? page * rows < total : videos.length >= rows,
+    hasMore,
   };
 }
 

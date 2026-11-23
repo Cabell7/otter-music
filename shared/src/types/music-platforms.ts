@@ -177,6 +177,7 @@ export interface BilibiliSearchResponse {
   message?: string;
   data?: {
     numResults?: number;
+    numPages?: number;
     result?: BilibiliSearchVideoRaw[];
   };
 }

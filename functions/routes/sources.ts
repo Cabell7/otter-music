@@ -1,16 +1,19 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import type { BilibiliSearchVideoRaw } from "@otter-music/shared";
 import type { Env } from "../types/hono";
 import { verifySiteJWT } from "../utils/auth";
 
 export const sourceRoutes = new Hono<{ Bindings: Env }>();
 
 const bili = "https://api.bilibili.com";
+const biliVideoSearch = bili + "/x/web-interface/search/all/v2";
+const biliVideoSearchRoute = "/bilibili/x/web-interface/search/type";
 const qq = "https://c.y.qq.com";
 const musicu = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const endpoints = new Map([
+  [`GET ${biliVideoSearchRoute}`, biliVideoSearch],
   ...[
-    "/x/web-interface/search/type",
     "/x/web-interface/view",
     "/x/player/playurl",
     "/x/player/wbi/v2",
@@ -77,7 +80,16 @@ for (const [key, endpoint] of endpoints) {
     }
 
     const target = new URL(endpoint);
-    target.search = new URL(c.req.url).search;
+    if (endpoint === biliVideoSearch) {
+      const keyword = c.req.query("keyword")?.trim() ?? "";
+      const page = c.req.query("page") ?? "1";
+      if (!keyword || keyword.length > 200 || !/^[1-9]\d{0,3}$/.test(page)) {
+        return c.json({ error: "Invalid Bilibili search parameters" }, 400);
+      }
+      target.search = new URLSearchParams({ keyword, page }).toString();
+    } else {
+      target.search = new URL(c.req.url).search;
+    }
     const isBili = target.origin === bili;
     const headers = new Headers({
       Referer: isBili ? "https://www.bilibili.com/" : "https://y.qq.com/",
@@ -120,41 +132,7 @@ for (const [key, endpoint] of endpoints) {
         redirect: "manual",
         signal: AbortSignal.timeout(8000),
       };
-      let upstream = await fetch(target, request);
-      if (
-        isBili &&
-        target.pathname === "/x/web-interface/search/type" &&
-        upstream.status === 412
-      ) {
-        await upstream.body?.cancel();
-        const visitor = await fetch(bili + "/x/frontend/finger/spi", {
-          headers: {
-            Referer: headers.get("Referer")!,
-            "User-Agent": headers.get("User-Agent")!,
-          },
-          redirect: "manual",
-          signal: request.signal,
-        });
-        if (
-          visitor.ok &&
-          visitor.headers.get("Content-Type")?.startsWith("application/json")
-        ) {
-          const payload: { data?: { b_3?: string; b_4?: string } } =
-            await visitor.json();
-          const { b_3, b_4 } = payload.data ?? {};
-          if (
-            b_3 &&
-            b_4 &&
-            /^[a-zA-Z0-9_-]{1,256}$/.test(b_3) &&
-            /^[a-zA-Z0-9_-]{1,256}$/.test(b_4)
-          ) {
-            headers.set("Cookie", `buvid3=${b_3}; buvid4=${b_4}`);
-            upstream = await fetch(target, request);
-          }
-        } else {
-          await visitor.body?.cancel();
-        }
-      }
+      const upstream = await fetch(target, request);
       const type = upstream.headers.get("Content-Type") ?? "";
       if (!upstream.ok) {
         return c.json(
@@ -179,6 +157,38 @@ for (const [key, endpoint] of endpoints) {
           424
         );
       }
+      if (endpoint === biliVideoSearch) {
+        const result = await upstream.json<{
+          code?: number;
+          data?: {
+            numPages?: number;
+            result?: { result_type: string; data?: BilibiliSearchVideoRaw[] }[];
+          };
+        }>();
+        if (result.code !== 0 || !Array.isArray(result.data?.result)) {
+          return c.json(
+            {
+              error: "Bilibili search unavailable",
+              reason: "upstream_search_payload",
+            },
+            424
+          );
+        }
+        const videos = result.data.result.find(
+          (group) => group.result_type === "video"
+        );
+        return c.json({
+          code: 0,
+          data: {
+            numPages: result.data.numPages,
+            result: (videos?.data ?? []).map((video) => ({
+              ...video,
+              type: "video",
+            })),
+          },
+        });
+      }
+
       // Fetch only API payloads. The browser downloads audio from the resulting CDN URL.
       return c.body(upstream.body, 200, {
         "Content-Type": "text/plain; charset=utf-8",

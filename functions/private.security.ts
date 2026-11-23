@@ -73,29 +73,53 @@ describe("private deployment", () => {
     }
   });
 
-  it("retries Bilibili search once with a server-issued visitor session", async () => {
+  it("maps authenticated Bilibili search to the public video results and preserves pagination", async () => {
     const { request } = fixture();
+    const path = "/api/bilibili/x/web-interface/search/type";
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(null, { status: 412 }))
       .mockResolvedValueOnce(
-        Response.json({ data: { b_3: "visitor-3", b_4: "visitor-4" } })
+        Response.json({
+          code: 0,
+          data: {
+            numPages: 50,
+            result: [
+              { result_type: "bili_user", data: [{ mid: 123 }] },
+              {
+                result_type: "video",
+                data: [{ bvid: "BV1BZbSzZEGT", title: "晴天" }],
+              },
+            ],
+          },
+        })
       )
-      .mockImplementationOnce(async (_url, init) => {
-        expect(new Headers(init?.headers).get("Cookie")).toBe(
-          "buvid3=visitor-3; buvid4=visitor-4"
-        );
-        return Response.json({ code: 0 });
-      });
-    try {
-      const response = await request(
-        "/api/bilibili/x/web-interface/search/type?keyword=Jay",
-        {
-          headers: { Cookie: `site=${await signSiteJWT(password)}` },
-        }
+      .mockResolvedValueOnce(
+        Response.json({ code: 0, data: { v_voucher: "challenge" } })
       );
-      expect(await response.json()).toEqual({ code: 0 });
-      expect(fetchSpy).toHaveBeenCalledTimes(3);
+    try {
+      expect((await request(path + "?keyword=Jay")).status).toBe(401);
+      const headers = { Cookie: `site=${await signSiteJWT(password)}` };
+      expect(
+        (await request(path + "?keyword=Jay&page=0", { headers })).status
+      ).toBe(400);
+      const query = "?keyword=Jay&page=2&page_size=40&url=https://example.com";
+      const response = await request(path + query, { headers });
+      expect(await response.json()).toEqual({
+        code: 0,
+        data: {
+          numPages: 50,
+          result: [{ bvid: "BV1BZbSzZEGT", title: "晴天", type: "video" }],
+        },
+      });
+      expect(fetchSpy).toHaveBeenCalledExactlyOnceWith(
+        new URL(
+          "https://api.bilibili.com/x/web-interface/search/all/v2?keyword=Jay&page=2"
+        ),
+        expect.objectContaining({ redirect: "manual" })
+      );
+      expect((await request(path + "?keyword=Jay", { headers })).status).toBe(
+        424
+      );
     } finally {
       fetchSpy.mockRestore();
     }
